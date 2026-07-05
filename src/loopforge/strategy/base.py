@@ -22,6 +22,10 @@ class ActionPlan:
     goal: str
     steps: list[str]
     reasoning: str = ""
+    # Direct edit data (avoids second LLM call)
+    filepath: str | None = None
+    search: str | None = None
+    replace: str | None = None
 
 
 @dataclass

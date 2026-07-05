@@ -5,6 +5,8 @@ Runs: check command → parse errors → fix each error → re-check → loop
 
 from __future__ import annotations
 
+import os
+import re
 import subprocess
 import time
 
@@ -23,22 +25,24 @@ from loopforge.strategy.base import (
     EvaluateResult,
 )
 
-
-FIX_SYSTEM_PROMPT = """\
-You are a code fixer. Given a set of errors/warnings, generate a concrete fix plan.
+FIX_PLAN_PROMPT = """\
+You are a precise code fixer. Given error output and file contents, produce a fix plan.
 
 Rules:
-1. Fix one category of error per round — don't try to fix everything at once
-2. If there are syntax errors, fix those first
-3. Prefer minimal, targeted changes
-4. Explain why each change fixes the error
+1. Fix ONE issue per round — be minimal and surgical
+2. Syntax errors take priority over logic errors
+3. Read the full file context before proposing a change
+4. Output in the format below
 
-Output format:
-GOAL: <one sentence summary of what this round fixes>
-STEPS:
-- <specific file change 1>
-- <specific file change 2>
-REASONING: <why this approach>
+Output format exactly:
+GOAL: <one sentence>
+FILE: <path to edit>
+SEARCH: <<<
+<exact lines to find in the file>
+>>>
+REPLACE: <<<
+<replacement lines>
+>>>
 """
 
 
@@ -49,226 +53,158 @@ class FixStrategy(BaseStrategy):
     def __init__(self, llm, **kwargs):
         super().__init__(llm=llm, **kwargs)
 
-    async def plan(self, state: LoopState) -> ActionPlan:
-        # Run the evaluation command to get current errors
-        eval_cmd = state.config.constraints.evaluation
-        errors = self._run_check(eval_cmd)
+    # ── Plan ────────────────────────────────────────────────────────
 
-        if not errors.strip():
+    async def plan(self, state: LoopState) -> ActionPlan:
+        target = state.config.target
+        eval_cmd = state.config.constraints.evaluation
+
+        errors = self._run_cmd(eval_cmd, cwd=self._target_dir(target))
+        files = self._read_target_files(target)
+
+        if not errors.strip() or "ALL_TESTS_PASSED" in errors:
             return ActionPlan(
-                goal="No errors detected — nothing to fix",
+                goal="No errors detected — all checks pass.",
                 steps=[],
-                reasoning="Evaluation command returned clean output",
+                reasoning="Evaluation command returned clean output.",
             )
 
-        # Ask LLM to generate a fix plan
-        messages = [
-            LLMMessage(role="user", content=f"""Current errors from `{eval_cmd}`:
+        ctx = f"""Evaluation command: `{eval_cmd}`
 
-{errors[:8000]}
+--- ERRORS ---
+{errors[:6000]}
+
+--- FILES ---
+{files[:8000]}
 
 Previous rounds: {len(state.rounds)}
-Best score so far: {state.best_score}
-
-Generate a fix plan for the NEXT batch of errors to fix.""")
-        ]
+Best score: {state.best_score}
+"""
 
         resp = await self.llm.chat(
-            messages=messages,
-            system=FIX_SYSTEM_PROMPT,
+            messages=[LLMMessage(role="user", content=ctx)],
+            system=FIX_PLAN_PROMPT,
             max_tokens=2048,
             temperature=0.2,
         )
 
-        # Parse LLM output
-        content = resp.content
-        goal = ""
-        steps = []
-        reasoning = ""
-
-        for line in content.split("\n"):
-            line = line.strip()
-            if line.upper().startswith("GOAL:"):
-                goal = line.split(":", 1)[1].strip()
-            elif line.upper().startswith("REASONING:"):
-                reasoning = line.split(":", 1)[1].strip()
-            elif line.startswith("- "):
-                steps.append(line[2:])
+        goal, filepath, search, replace = self._parse_plan(resp.content)
 
         if not goal:
-            goal = "Fix errors detected by evaluation command"
-        if not steps:
-            steps = ["Apply LLM-suggested fix to source files"]
+            goal = "Fix detected errors"
 
-        return ActionPlan(goal=goal, steps=steps, reasoning=reasoning)
+        steps = []
+        if filepath and search is not None and replace is not None:
+            steps.append(f"Edit {filepath}: replace '{search[:80]}' with '{replace[:80]}'")
 
-    def _run_check(self, cmd: str) -> str:
-        """Run the evaluation command and return stdout+stderr."""
-        try:
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                cwd=self._resolve_cwd(),
-            )
-            return (result.stdout + "\n" + result.stderr).strip()
-        except subprocess.TimeoutExpired:
-            return "Check timed out"
-        except Exception as e:
-            return str(e)
+        return ActionPlan(
+            goal=goal,
+            steps=steps,
+            reasoning=resp.content[:500],
+            filepath=filepath,
+            search=search,
+            replace=replace,
+        )
 
-    def _resolve_cwd(self) -> str | None:
-        """Resolve the working directory from target path."""
-        # Default to current directory
-        return None
+    def _parse_plan(self, content: str) -> tuple[str, str | None, str | None, str | None]:
+        """Parse GOAL/FILE/SEARCH/REPLACE from LLM output."""
+        goal = ""
+        filepath = None
+        search = None
+        replace = None
+
+        for line in content.split("\n"):
+            s = line.strip()
+            if s.upper().startswith("GOAL:"):
+                goal = s.split(":", 1)[1].strip()
+            elif s.upper().startswith("FILE:"):
+                filepath = s.split(":", 1)[1].strip()
+
+        # Extract SEARCH/REPLACE blocks
+        s_match = re.search(r'SEARCH:\s*<<<\s*\n(.*?)\n\s*>>>', content, re.DOTALL)
+        r_match = re.search(r'REPLACE:\s*<<<\s*\n(.*?)\n\s*>>>', content, re.DOTALL)
+
+        if s_match:
+            search = s_match.group(1)
+        if r_match:
+            replace = r_match.group(1)
+
+        return goal, filepath, search, replace
+
+    # ── Act ─────────────────────────────────────────────────────────
 
     async def act(self, plan: ActionPlan, state: LoopState) -> ActionResult:
         actions = []
         success = True
         error_msg = None
 
-        for step in plan.steps:
+        # Use edit data from plan directly (no second LLM call needed)
+        if plan.filepath and plan.search is not None and plan.replace is not None:
             start = time.time()
             try:
-                # Ask LLM to generate the actual code change
-                messages = [
-                    LLMMessage(role="user", content=f"""Plan goal: {plan.goal}
-Step to implement: {step}
-
-Previous best score: {state.best_score}
-
-Generate the EXACT code change needed. Use this format:
-FILE: <path>
---- ORIGINAL
-<old code>
-+++ FIXED
-<new code>""")
-                ]
-
-                resp = await self.llm.chat(
-                    messages=messages,
-                    max_tokens=4096,
-                    temperature=0.1,
-                )
-
-                # Parse and apply the change
-                parsed = self._parse_diff(resp.content)
-                if parsed:
-                    filepath, old, new = parsed
-                    self._apply_change(filepath, old, new)
-                    actions.append(ActionStep(
-                        description=f"Fixed {filepath}: {step[:100]}",
-                        tool="write_file",
-                        input_summary=old[:200],
-                        output_summary=new[:200],
-                        duration_ms=int((time.time() - start) * 1000),
-                    ))
-                else:
-                    actions.append(ActionStep(
-                        description=f"LLM suggested fix (not auto-applied): {step[:100]}",
-                        tool="llm_call",
-                        input_summary=step[:200],
-                        output_summary=resp.content[:200],
-                        duration_ms=int((time.time() - start) * 1000),
-                    ))
-
+                self._apply_edit(plan.filepath, plan.search, plan.replace)
+                actions.append(ActionStep(
+                    description=f"Edited {plan.filepath}: {plan.goal[:120]}",
+                    tool="write_file",
+                    input_summary=plan.search[:200],
+                    output_summary=plan.replace[:200],
+                    duration_ms=int((time.time() - start) * 1000),
+                ))
             except Exception as e:
                 success = False
                 error_msg = str(e)
                 actions.append(ActionStep(
-                    description=f"Failed: {step[:100]}",
+                    description=f"Failed edit {plan.filepath}: {plan.goal[:100]}",
                     tool="write_file",
-                    input_summary=step[:200],
+                    input_summary=plan.search[:200],
                     output_summary=str(e),
                     duration_ms=int((time.time() - start) * 1000),
                     error=str(e),
                 ))
+            return ActionResult(success=success, actions=actions, error=error_msg)
 
-        return ActionResult(success=success, actions=actions, error=error_msg)
+        # Fallback: describe what we would do
+        for step in plan.steps:
+            actions.append(ActionStep(
+                description=f"Plan (no direct edit data): {step[:200]}",
+                tool="llm_call",
+                input_summary=plan.goal[:200],
+                output_summary=plan.reasoning[:300],
+                duration_ms=0,
+            ))
 
-    def _parse_diff(self, content: str) -> tuple[str, str, str] | None:
-        """Parse a FILE/ORIGINAL/FIXED block from LLM output."""
-        filepath = ""
-        original = ""
-        fixed = ""
+        return ActionResult(success=True, actions=actions)
 
-        for line in content.split("\n"):
-            if line.upper().startswith("FILE:"):
-                filepath = line.split(":", 1)[1].strip()
-            elif line.strip() == "--- ORIGINAL":
-                original = ""
-            elif line.strip() == "+++ FIXED":
-                # Switch to collecting fixed
-                pass
-            elif original is not None and filepath:
-                # Simple case: collect until we see +++ FIXED
-                pass
-
-        # Simplified: just return the raw content for now
-        if "FILE:" in content:
-            lines = content.split("\n")
-            for i, line in enumerate(lines):
-                if line.upper().startswith("FILE:"):
-                    filepath = line.split(":", 1)[1].strip()
-                    # Find ORIGINAL and FIXED sections
-                    rest = "\n".join(lines[i+1:])
-                    if "--- ORIGINAL" in rest and "+++ FIXED" in rest:
-                        orig_start = rest.index("--- ORIGINAL") + len("--- ORIGINAL")
-                        fixed_start = rest.index("+++ FIXED")
-                        orig_end = fixed_start
-                        original = rest[orig_start:orig_end].strip()
-                        fixed = rest[fixed_start + len("+++ FIXED"):].strip()
-                        return (filepath, original, fixed)
-            return None
-        return None
-
-    def _apply_change(self, filepath: str, old: str, new: str):
-        """Apply a file change. Creates backup first."""
-        import os
-
-        if not os.path.exists(filepath):
-            # New file
-            os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
-            with open(filepath, "w") as f:
-                f.write(new)
-            return
-
-        with open(filepath, "r") as f:
-            content = f.read()
-
-        if old in content:
-            content = content.replace(old, new, 1)
-            with open(filepath, "w") as f:
-                f.write(content)
+    # ── Evaluate ────────────────────────────────────────────────────
 
     async def evaluate(self, result: ActionResult, state: LoopState) -> EvaluateResult:
         eval_cmd = state.config.constraints.evaluation
+        target = state.config.target
 
         try:
-            proc = subprocess.run(
-                eval_cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            output = (proc.stdout + "\n" + proc.stderr).strip()
+            output = self._run_cmd(eval_cmd, cwd=self._target_dir(target))
+            error_lines = [
+                l for l in output.split("\n")
+                if any(kw in l.lower() for kw in ("error", "fail", "traceback", "syntaxerror"))
+            ]
 
-            # Score: if exit code 0 and no error output → high score
-            # Each error line reduces the score
-            error_lines = [l for l in output.split("\n") if "error" in l.lower() or "fail" in l.lower()]
-            if proc.returncode == 0 and len(error_lines) == 0:
+            if not error_lines and "ALL_TESTS_PASSED" not in output:
+                # No errors and not explicitly passing — still good
+                score = 1.0 if output.strip() == "" else 0.95
+            elif not error_lines:
                 score = 1.0
-            elif proc.returncode == 0:
-                score = max(0.0, 1.0 - len(error_lines) * 0.1)
             else:
-                score = max(0.0, 0.5 - len(error_lines) * 0.05)
+                score = max(0.0, 1.0 - len(error_lines) * 0.08)
 
-            return EvaluateResult(score=round(score, 3), raw_output=output[:5000])
+            return EvaluateResult(
+                score=round(min(score, 1.0), 3),
+                raw_output=output[:5000],
+                metrics={"error_count": len(error_lines)},
+            )
         except Exception as e:
             return EvaluateResult(score=0.0, raw_output=str(e))
+
+    # ── Decide ──────────────────────────────────────────────────────
 
     async def decide(
         self,
@@ -279,14 +215,89 @@ FILE: <path>
         if score >= constraints.threshold:
             return Decision.STOP
 
-        # If last 3 rounds showed no improvement, stop
         if len(history) >= 3:
             recent = history[-3:]
-            if all(r.score <= 0.5 for r in recent) and max(r.score for r in recent) <= history[-4].score if len(history) >= 4 else False:
+            if all(r.score < 0.6 for r in recent):
                 return Decision.STOP
 
-        # If score decreased, backtrack
-        if len(history) >= 2 and score < history[-2].score - 0.1:
+        if len(history) >= 2 and score < history[-2].score - 0.15:
             return Decision.BACKTRACK
 
         return Decision.CONTINUE
+
+    # ── Helpers ─────────────────────────────────────────────────────
+
+    def _run_cmd(self, cmd: str, cwd: str | None = None) -> str:
+        try:
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True, timeout=120, cwd=cwd,
+            )
+            return (result.stdout + "\n" + result.stderr).strip()
+        except subprocess.TimeoutExpired:
+            return "Command timed out after 120s"
+        except Exception as e:
+            return str(e)
+
+    def _target_dir(self, target) -> str | None:
+        """Resolve working directory from target path."""
+        if target.path and os.path.isdir(target.path):
+            return target.path
+        if target.path and os.path.isfile(target.path):
+            return os.path.dirname(target.path) or "."
+        return None
+
+    def _read_target_files(self, target) -> str:
+        """Read files from the target path."""
+        parts = []
+        p = target.path
+        if not p:
+            return ""
+
+        if os.path.isfile(p):
+            try:
+                with open(p) as f:
+                    parts.append(f"=== {p} ===\n{f.read()}")
+            except Exception:
+                pass
+        elif os.path.isdir(p):
+            for root, _, files in os.walk(p):
+                for fn in sorted(files):
+                    if fn.endswith((".py", ".js", ".ts", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".sql", ".yaml", ".yml", ".json", ".toml")):
+                        fpath = os.path.join(root, fn)
+                        try:
+                            with open(fpath) as f:
+                                content = f.read()
+                            if len(content) < 50000:
+                                parts.append(f"=== {fpath} ===\n{content}")
+                        except Exception:
+                            pass
+                if len(parts) > 20:
+                    break
+
+        return "\n\n".join(parts[:8000])
+
+    def _apply_edit(self, filepath: str, search: str, replace: str):
+        """Find search text in file and replace it."""
+        if not os.path.exists(filepath):
+            # New file
+            os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+            with open(filepath, "w") as f:
+                f.write(replace)
+            return
+
+        with open(filepath) as f:
+            content = f.read()
+
+        if search in content:
+            content = content.replace(search, replace, 1)
+        else:
+            # Try stripping whitespace differences
+            search_stripped = search.strip()
+            if search_stripped in content:
+                content = content.replace(search_stripped, replace.strip(), 1)
+            else:
+                # Append suggestion as comment if exact match fails
+                content += f"\n# FIXME: could not auto-apply — {replace[:100]}\n"
+
+        with open(filepath, "w") as f:
+            f.write(content)
