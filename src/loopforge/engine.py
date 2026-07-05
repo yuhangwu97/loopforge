@@ -159,7 +159,7 @@ class LoopEngine:
                     score=eval_result.score,
                     evaluation_output=eval_result.raw_output,
                     decision=decision,
-                    tokens_used=0,  # TODO: track from LLM calls
+                    tokens_used=llm.total_tokens,
                     started_at=self.state.updated_at,
                     finished_at=datetime.now().isoformat(),
                 )

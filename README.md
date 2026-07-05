@@ -99,6 +99,8 @@ loopforge serve --port 8848
 
 浏览器打开 `http://localhost:8848`，通过 Dashboard 管理任务。
 
+![Dashboard](docs/dashboard.png)
+
 ## 工作原理
 
 LoopForge 的核心是一个四阶段状态机，每轮走一遍：
@@ -161,7 +163,8 @@ Strategy    LLM Client     Database
 - fix       - Claude       - SQLite
 - optimize  - OpenAI       - loops 表
 - refactor  - DeepSeek     - rounds 表
-(可插拔)    (统一接口)      (WAL 模式)
+- generate  (统一接口)      (WAL 模式)
+- review
 ```
 
 - **Strategy 插件系统**：每个策略实现 `plan()`、`act()`、`evaluate()`、`decide()` 四个方法。通过 `pyproject.toml` 的 entry point 注册，pip 安装即可用
@@ -259,7 +262,9 @@ src/loopforge/
 │   └── builtin/         内置策略
 │       ├── fix.py
 │       ├── optimize.py
-│       └── refactor.py
+│       ├── refactor.py
+│       ├── generate.py
+│       └── review.py
 └── llm/
     ├── client.py         多 provider 统一接口
     ├── types.py          共享类型定义
@@ -273,9 +278,7 @@ src/loopforge/
 ## 下一步
 
 - [ ] Docker 沙箱隔离
-- [ ] GitHub Bot（PR 触发自动修）
-- [ ] `generate` 和 `review` 策略
-- [ ] 每轮 token 用量追踪
+- [ ] GitHub Bot PR 自动评论
 
 ## License
 

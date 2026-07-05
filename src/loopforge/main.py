@@ -86,11 +86,27 @@ def run(
 @app.command()
 def bot(
     repo: str = typer.Option(..., help="GitHub repository: owner/repo"),
-    on_pr: bool = typer.Option(True, help="Trigger on pull requests"),
+    port: int = typer.Option(8848, help="Port to listen on"),
 ):
-    """Run as a GitHub bot (coming soon)."""
-    console.print("[yellow]GitHub bot mode is not implemented yet.[/]")
-    console.print(f"Would watch: {repo} (on_pr={on_pr})")
+    """Start a GitHub bot server — listens for PR webhooks and auto-fixes code."""
+    import uvicorn
+
+    console.print(f"[bold green]LoopForge GitHub Bot[/]")
+    console.print(f"  Repo: {repo}")
+    console.print(f"  Webhook URL: http://<host>:{port}/api/v1/webhook/github")
+    console.print()
+    console.print("Configure this URL in your GitHub repo settings:")
+    console.print(f"  Settings → Webhooks → Add webhook")
+    console.print(f"  Payload URL: http://<your-server>:{port}/api/v1/webhook/github")
+    console.print(f"  Content type: application/json")
+    console.print(f"  Events: Pull requests")
+
+    uvicorn.run(
+        "loopforge.server:app",
+        host="0.0.0.0",
+        port=port,
+        log_level="info",
+    )
 
 
 @app.command()

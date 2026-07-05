@@ -40,11 +40,15 @@ def get_strategy(name: str, **kwargs) -> BaseStrategy:
         from loopforge.strategy.builtin.fix import FixStrategy
         from loopforge.strategy.builtin.optimize import OptimizeStrategy
         from loopforge.strategy.builtin.refactor import RefactorStrategy
+        from loopforge.strategy.builtin.generate import GenerateStrategy
+        from loopforge.strategy.builtin.review import ReviewStrategy
 
         builtins = {
             "fix": FixStrategy,
             "optimize": OptimizeStrategy,
             "refactor": RefactorStrategy,
+            "generate": GenerateStrategy,
+            "review": ReviewStrategy,
         }
         for n, cls in builtins.items():
             register(n, cls)
@@ -62,11 +66,15 @@ def list_strategies() -> list[dict[str, Any]]:
     from loopforge.strategy.builtin.fix import FixStrategy
     from loopforge.strategy.builtin.optimize import OptimizeStrategy
     from loopforge.strategy.builtin.refactor import RefactorStrategy
+    from loopforge.strategy.builtin.generate import GenerateStrategy
+    from loopforge.strategy.builtin.review import ReviewStrategy
 
     builtins = {
         "fix": FixStrategy,
         "optimize": OptimizeStrategy,
         "refactor": RefactorStrategy,
+        "generate": GenerateStrategy,
+        "review": ReviewStrategy,
     }
     for n, cls in builtins.items():
         if n not in _registry:

@@ -55,8 +55,8 @@ postgres = ["psycopg2-binary>=2.9", "asyncpg>=0.30.0"]
 loopforge = "loopforge.main:cli"
 
 [project.entry-points."loopforge.strategies"]
-optimize = "loopforge.strategy.builtin.optimize:OptimizeStrategy"
 fix = "loopforge.strategy.builtin.fix:FixStrategy"
+optimize = "loopforge.strategy.builtin.optimize:OptimizeStrategy"
 refactor = "loopforge.strategy.builtin.refactor:RefactorStrategy"
 generate = "loopforge.strategy.builtin.generate:GenerateStrategy"
 review = "loopforge.strategy.builtin.review:ReviewStrategy"

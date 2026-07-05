@@ -18,7 +18,21 @@ class LLMClient:
     def __init__(self, model: str | None = None):
         self.model = model or os.getenv("LOOPFORGE_MODEL", "claude-sonnet-5")
         self._providers: dict[str, Any] = {}
+        self._tokens_in: int = 0
+        self._tokens_out: int = 0
         self._init_providers()
+
+    @property
+    def total_tokens(self) -> int:
+        return self._tokens_in + self._tokens_out
+
+    @property
+    def tokens_in(self) -> int:
+        return self._tokens_in
+
+    @property
+    def tokens_out(self) -> int:
+        return self._tokens_out
 
     def _init_providers(self):
         # Claude / Anthropic
@@ -92,12 +106,15 @@ class LLMClient:
         for msg in messages:
             msgs.append({"role": msg.role, "content": msg.content})
 
-        return await provider.chat(
+        resp = await provider.chat(
             messages=msgs,
             model=resolved_model,
             max_tokens=max_tokens,
             temperature=temperature,
         )
+        self._tokens_in += resp.tokens_in
+        self._tokens_out += resp.tokens_out
+        return resp
 
     async def chat_stream(
         self,
