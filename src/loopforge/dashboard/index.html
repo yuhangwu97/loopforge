@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LoopForge</title>
+<style>
+:root {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  --text: #1a1a2e;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --accent: #1a1a2e;
+  --accent-hover: #374151;
+  --green: #059669;
+  --green-bg: #ecfdf5;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --blue: #2563eb;
+  --blue-bg: #eff6ff;
+  --gray-bg: #f3f4f6;
+  --radius: 6px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'SF Mono', SFMono-Regular, ui-monospace, 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Sidebar ────────────────────────────────────── */
+
+.sidebar {
+  width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-brand {
+  font-size: 15px;
+  font-weight: 700;
+  padding: 0 20px 24px;
+  letter-spacing: -0.3px;
+  color: var(--accent);
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font);
+}
+
+.sidebar-item:hover { background: var(--gray-bg); color: var(--text); }
+.sidebar-item.active { background: var(--gray-bg); color: var(--text); font-weight: 600; }
+
+.sidebar-item .icon { width: 16px; text-align: center; font-size: 14px; flex-shrink: 0; }
+.sidebar-item .badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--border);
+  color: var(--text-secondary);
+  padding: 1px 6px;
+  border-radius: 99px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.sidebar-footer {
+  padding: 16px 20px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── Main ───────────────────────────────────────── */
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.toolbar-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.btn {
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.btn-primary:hover { background: var(--accent-hover); }
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn-secondary:hover { background: var(--gray-bg); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
+}
+.btn-ghost:hover { background: var(--gray-bg); color: var(--text); }
+
+.btn-sm { padding: 3px 8px; font-size: 11px; }
+
+/* ── Inputs ─────────────────────────────────────── */
+
+.input, .select {
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.15s;
+  height: 30px;
+}
+.input:focus, .select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(26,26,46,0.08); }
+.input { width: 160px; }
+.select { cursor: pointer; }
+
+/* ── Content ────────────────────────────────────── */
+
+.content { flex: 1; padding: 24px; overflow-y: auto; }
+
+/* ── Table ──────────────────────────────────────── */
+
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+thead th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  padding: 10px 16px;
+  background: var(--gray-bg);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--gray-bg); }
+tbody tr.selected td { background: var(--blue-bg); }
+
+/* ── Status badges ──────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.badge-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+
+.badge-done       { background: var(--green-bg); color: var(--green); }
+.badge-done .badge-dot  { background: var(--green); }
+.badge-failed     { background: var(--red-bg); color: var(--red); }
+.badge-failed .badge-dot { background: var(--red); }
+.badge-running    { background: var(--blue-bg); color: var(--blue); }
+.badge-running .badge-dot { background: var(--blue); animation: pulse 1.5s ease-in-out infinite; }
+.badge-paused     { background: var(--amber-bg); color: var(--amber); }
+.badge-paused .badge-dot  { background: var(--amber); }
+.badge-cancelled  { background: var(--gray-bg); color: var(--text-muted); }
+.badge-cancelled .badge-dot { background: var(--text-muted); }
+.badge-idle       { background: var(--gray-bg); color: var(--text-muted); }
+.badge-idle .badge-dot { background: var(--text-muted); }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ── Score ──────────────────────────────────────── */
+
+.score { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.score.good { color: var(--green); }
+.score.mid  { color: var(--amber); }
+.score.low  { color: var(--red); }
+
+/* ── Expandable detail ──────────────────────────── */
+
+.task-name {
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--accent);
+}
+.task-name:hover { text-decoration: underline; }
+
+.detail-row td { padding: 0 !important; background: var(--gray-bg); border-bottom: 2px solid var(--border); }
+
+.detail-panel {
+  padding: 16px 24px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.detail-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.detail-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.detail-stat-value {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.detail-rounds-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+/* actions list */
+.action-item {
+  display: flex;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.action-item:last-child { border-bottom: none; }
+.action-icon {
+  width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; flex-shrink: 0; margin-top: 1px;
+}
+.action-icon.ok { color: var(--green); }
+.action-icon.err { color: var(--red); }
+.action-desc { flex: 1; color: var(--text); }
+.action-meta { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+
+/* ── Dialog / Modal ─────────────────────────────── */
+
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.3);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  opacity: 0; pointer-events: none; transition: opacity 0.15s;
+}
+.overlay.open { opacity: 1; pointer-events: all; }
+
+.dialog {
+  background: var(--surface);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  width: 520px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.dialog-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.dialog-title { font-size: 14px; font-weight: 700; }
+
+.dialog-close {
+  background: none; border: none; font-size: 18px; color: var(--text-muted);
+  cursor: pointer; padding: 2px 6px; line-height: 1;
+}
+.dialog-close:hover { color: var(--text); }
+
+.dialog-body { padding: 20px; }
+.dialog-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+
+.form-group { margin-bottom: 14px; }
+.form-label {
+  display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 4px;
+}
+.form-group .input, .form-group .select { width: 100%; }
+.form-hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ── Toast ──────────────────────────────────────── */
+
+.toast-container {
+  position: fixed; top: 16px; right: 16px; z-index: 200;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  font-size: 12px;
+  box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 8px;
+  animation: slideIn 0.2s ease-out;
+  max-width: 360px;
+}
+
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error   { border-left: 3px solid var(--red); }
+.toast.info    { border-left: 3px solid var(--blue); }
+
+@keyframes slideIn {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ── Empty state ────────────────────────────────── */
+
+.empty-state {
+  text-align: center; padding: 60px 24px; color: var(--text-muted);
+}
+.empty-state-icon { font-size: 32px; margin-bottom: 12px; }
+.empty-state-text { font-size: 14px; margin-bottom: 4px; }
+.empty-state-hint { font-size: 12px; }
+
+/* ── Misc ───────────────────────────────────────── */
+
+.text-mono { font-family: var(--mono); font-size: 11px; }
+.text-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-action { max-width: 280px; }
+.hidden { display: none; }
+
+@media (max-width: 768px) {
+  body { flex-direction: column; }
+  .sidebar { width: 100%; flex-direction: row; padding: 8px 12px; gap: 8px; overflow-x: auto; }
+  .sidebar-brand { padding: 0; font-size: 13px; }
+  .sidebar-nav { flex-direction: row; }
+  .sidebar-item { padding: 6px 10px; font-size: 12px; }
+  .content { padding: 12px; }
+  .toolbar { padding: 10px 12px; gap: 6px; }
+  .detail-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-brand">LoopForge</div>
+  <nav class="sidebar-nav">
+    <button class="sidebar-item active" onclick="switchView('tasks')">
+      <span class="icon">&#9632;</span> Tasks
+      <span class="badge" id="task-count">0</span>
+    </button>
+    <button class="sidebar-item" onclick="switchView('strategies')">
+      <span class="icon">&#9881;</span> Strategies
+    </button>
+  </nav>
+  <div class="sidebar-footer">v0.1.0</div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <!-- Toolbar -->
+  <div class="toolbar" id="toolbar-tasks">
+    <span class="toolbar-title">Tasks</span>
+    <button class="btn btn-primary" onclick="openDialog()">+ New Task</button>
+    <button class="btn btn-ghost btn-sm" onclick="refresh()" title="Refresh">&#8635;</button>
+  </div>
+  <div class="toolbar hidden" id="toolbar-strategies">
+    <span class="toolbar-title">Strategies</span>
+  </div>
+
+  <!-- Tasks view -->
+  <div class="content" id="view-tasks">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:18%">Name</th>
+            <th style="width:10%">Status</th>
+            <th style="width:10%">Strategy</th>
+            <th style="width:8%">Round</th>
+            <th style="width:8%">Score</th>
+            <th style="width:34%">Last Action</th>
+            <th style="width:12%">Created</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="empty">
+      <div class="empty-state-icon">&#9744;</div>
+      <div class="empty-state-text">No tasks yet</div>
+      <div class="empty-state-hint">Click "+ New Task" to create one.</div>
+    </div>
+  </div>
+
+  <!-- Strategies view -->
+  <div class="content hidden" id="view-strategies">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Description</th></tr></thead>
+        <tbody id="strategies-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- New Task Dialog -->
+<div class="overlay" id="dialog-overlay">
+  <div class="dialog">
+    <div class="dialog-header">
+      <span class="dialog-title">New Task</span>
+      <button class="dialog-close" onclick="closeDialog()">&times;</button>
+    </div>
+    <div class="dialog-body">
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input class="input" id="dlg-name" placeholder="my-task" style="width:100%">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Strategy</label>
+          <select class="select" id="dlg-strategy" style="width:100%">
+            <option value="fix">fix</option>
+            <option value="optimize">optimize</option>
+            <option value="refactor">refactor</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Model</label>
+          <select class="select" id="dlg-model" style="width:100%">
+            <option value="deepseek-chat">deepseek-chat</option>
+            <option value="claude-sonnet-5">claude-sonnet-5</option>
+            <option value="gpt-4o">gpt-4o</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Target Path</label>
+        <input class="input" id="dlg-target" placeholder="./src" style="width:100%">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Evaluation Command</label>
+        <input class="input" id="dlg-eval" placeholder="pytest" style="width:100%">
+        <div class="form-hint">Runs after each round. Exit 0 + clean output = high score.</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Max Rounds</label>
+          <input class="input" id="dlg-rounds" type="number" value="10" min="1" max="100" style="width:100%">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Threshold</label>
+          <input class="input" id="dlg-threshold" type="number" value="0.9" min="0" max="1" step="0.05" style="width:100%">
+        </div>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn btn-secondary" onclick="closeDialog()">Cancel</button>
+      <button class="btn btn-primary" onclick="createTask()">Create Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+const BASE = '';
+let eventSources = {};
+let selectedId = null;
+
+// ── Views ──────────────────────────────────────────
+
+function switchView(view) {
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('view-tasks').classList.toggle('hidden', view !== 'tasks');
+  document.getElementById('view-strategies').classList.toggle('hidden', view !== 'strategies');
+  document.getElementById('toolbar-tasks').classList.toggle('hidden', view !== 'tasks');
+  document.getElementById('toolbar-strategies').classList.toggle('hidden', view !== 'strategies');
+  if (view === 'strategies') loadStrategies();
+}
+
+// ── Dialog ─────────────────────────────────────────
+
+function openDialog()  { document.getElementById('dialog-overlay').classList.add('open'); }
+function closeDialog() { document.getElementById('dialog-overlay').classList.remove('open'); }
+
+document.getElementById('dialog-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeDialog();
+});
+
+// ── Toast ──────────────────────────────────────────
+
+function toast(msg, type) {
+  type = type || 'info';
+  const container = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; }, 3000);
+  setTimeout(() => el.remove(), 3300);
+}
+
+// ── Data ───────────────────────────────────────────
+
+async function refresh() {
+  try {
+    const res = await fetch(BASE + '/api/v1/loops');
+    if (!res.ok) throw new Error(res.statusText);
+    const loops = await res.json();
+    renderTable(loops);
+    document.getElementById('task-count').textContent = loops.length;
+  } catch(e) {
+    toast('Failed to load tasks', 'error');
+  }
+}
+
+async function createTask() {
+  const body = {
+    config: {
+      name: document.getElementById('dlg-name').value || 'untitled',
+      strategy: document.getElementById('dlg-strategy').value,
+      target: { path: document.getElementById('dlg-target').value, language: 'python' },
+      constraints: {
+        max_rounds: parseInt(document.getElementById('dlg-rounds').value) || 10,
+        evaluation: document.getElementById('dlg-eval').value || 'true',
+        threshold: parseFloat(document.getElementById('dlg-threshold').value) || 0.9,
+      },
+      llm_model: document.getElementById('dlg-model').value,
+    }
+  };
+
+  try {
+    const res = await fetch(BASE + '/api/v1/loops', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    closeDialog();
+    toast('Task created', 'success');
+    listen(data.id);
+    refresh();
+  } catch(e) {
+    toast('Failed: ' + e.message, 'error');
+  }
+}
+
+async function loadStrategies() {
+  try {
+    const res = await fetch(BASE + '/api/v1/strategies');
+    const list = await res.json();
+    const tbody = document.getElementById('strategies-tbody');
+    tbody.innerHTML = list.map(s =>
+      '<tr><td style="font-weight:600">' + esc(s.name) + '</td><td>' + esc(s.description) + '</td></tr>'
+    ).join('');
+  } catch(e) {}
+}
+
+// ── SSE ────────────────────────────────────────────
+
+function listen(loopId) {
+  if (eventSources[loopId]) return;
+  const es = new EventSource(BASE + '/api/v1/loops/' + loopId + '/events');
+  es.addEventListener('round_end', () => refresh());
+  es.addEventListener('loop_done', () => { refresh(); es.close(); delete eventSources[loopId]; });
+  es.onerror = () => { es.close(); delete eventSources[loopId]; refresh(); };
+  eventSources[loopId] = es;
+}
+
+// ── Render ─────────────────────────────────────────
+
+function statusBadge(s) {
+  const cls = statusClass(s);
+  const label = {done:'Done',failed:'Failed',cancelled:'Cancelled',paused:'Paused',idle:'Idle'}[cls] || 'Running';
+  return '<span class="badge badge-' + cls + '"><span class="badge-dot"></span>' + label + '</span>';
+}
+
+function statusClass(s) {
+  const map = {done:'done',failed:'failed',cancelled:'cancelled',paused:'paused',idle:'idle'};
+  if (map[s]) return map[s];
+  if (['planning','acting','evaluating','deciding'].includes(s)) return 'running';
+  return 'running';
+}
+
+function scoreClass(v) { return v >= 0.8 ? 'good' : v >= 0.5 ? 'mid' : 'low'; }
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+
+function lastAction(loop) {
+  if (!loop.rounds || !loop.rounds.length) return '—';
+  const last = loop.rounds[loop.rounds.length - 1];
+  if (last.actions && last.actions.length) {
+    return esc(last.actions[last.actions.length - 1].description || '');
+  }
+  return esc((last.plan || '').substring(0, 120));
+}
+
+function renderTable(loops) {
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+  if (!loops.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = loops.map(l => {
+    const sel = selectedId === l.id ? ' selected' : '';
+    return '<tr id="row-' + l.id + '" class="' + sel + '">' +
+      '<td><span class="task-name" onclick="toggleDetail(\'' + l.id + '\')">' + esc(l.name) + '</span></td>' +
+      '<td>' + statusBadge(l.status) + '</td>' +
+      '<td>' + esc(l.strategy) + '</td>' +
+      '<td>' + l.current_round + '</td>' +
+      '<td><span class="score ' + scoreClass(l.best_score) + '">' + l.best_score.toFixed(2) + '</span></td>' +
+      '<td class="col-action"><span class="text-ellipsis" style="display:block;max-width:280px;color:var(--text-secondary)">' + lastAction(l) + '</span></td>' +
+      '<td class="text-mono" style="color:var(--text-muted)">' + timeAgo(l.created_at) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  loops.forEach(l => {
+    if (!['done','failed','cancelled'].includes(l.status)) listen(l.id);
+  });
+}
+
+async function toggleDetail(loopId) {
+  if (selectedId === loopId) {
+    const row = document.getElementById('detail-' + loopId);
+    if (row) row.remove();
+    document.getElementById('row-' + loopId).classList.remove('selected');
+    selectedId = null;
+    return;
+  }
+  // Remove previous
+  if (selectedId) {
+    const old = document.getElementById('detail-' + selectedId);
+    if (old) old.remove();
+    const oldRow = document.getElementById('row-' + selectedId);
+    if (oldRow) oldRow.classList.remove('selected');
+  }
+  selectedId = loopId;
+  document.getElementById('row-' + loopId).classList.add('selected');
+
+  try {
+    const res = await fetch(BASE + '/api/v1/loops/' + loopId);
+    if (!res.ok) throw new Error(res.statusText);
+    const loop = await res.json();
+    const rounds = loop.rounds || [];
+    const errors = loop.errors || [];
+
+    let html = '<div class="detail-panel">';
+
+    // Stats
+    html += '<div class="detail-grid">';
+    html += statCard('Total Rounds', loop.current_round);
+    html += statCard('Best Score', loop.best_score.toFixed(2));
+    html += statCard('Status', loop.status);
+    html += '</div>';
+
+    // Errors
+    if (errors.length) {
+      html += '<div style="margin-bottom:16px;padding:10px 14px;background:var(--red-bg);border:1px solid #fecaca;border-radius:var(--radius);font-size:12px;">';
+      html += '<strong style="color:var(--red)">Errors</strong>';
+      errors.forEach(e => { html += '<div style="color:var(--red);margin-top:4px;">' + esc(e) + '</div>'; });
+      html += '</div>';
+    }
+
+    // Rounds
+    if (rounds.length) {
+      html += '<div class="detail-rounds-title">Rounds</div>';
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">';
+      html += '<table><thead><tr><th>#</th><th>Plan</th><th>Score</th><th>Decision</th></tr></thead><tbody>';
+      rounds.forEach(r => {
+        html += '<tr>' +
+          '<td>' + r.round_number + '</td>' +
+          '<td>' + esc((r.plan || '').substring(0, 200)) + '</td>' +
+          '<td><span class="score ' + scoreClass(r.score) + '">' + r.score.toFixed(2) + '</span></td>' +
+          '<td>' + r.decision + '</td>' +
+        '</tr>';
+        // Actions
+        if (r.actions && r.actions.length) {
+          html += '<tr><td colspan="4" style="padding-top:0;padding-bottom:12px;">';
+          r.actions.forEach(a => {
+            const iconCls = a.error ? 'err' : 'ok';
+            const icon = a.error ? '&#10007;' : '&#10003;';
+            html += '<div class="action-item">' +
+              '<span class="action-icon ' + iconCls + '">' + icon + '</span>' +
+              '<span class="action-desc">' + esc(a.description || '') + '</span>' +
+              '<span class="action-meta">' + (a.duration_ms ? (a.duration_ms + 'ms') : '') + '</span>' +
+            '</div>';
+          });
+          html += '</td></tr>';
+        }
+      });
+      html += '</tbody></table></div>';
+    } else {
+      html += '<div class="detail-rounds-title">No rounds recorded</div>';
+    }
+
+    html += '</div>';
+
+    const detailRow = document.createElement('tr');
+    detailRow.id = 'detail-' + loopId;
+    detailRow.className = 'detail-row';
+    detailRow.innerHTML = '<td colspan="7">' + html + '</td>';
+    document.getElementById('row-' + loopId).after(detailRow);
+  } catch(e) {
+    toast('Failed to load details', 'error');
+  }
+}
+
+function statCard(label, value) {
+  return '<div class="detail-stat">' +
+    '<div class="detail-stat-label">' + esc(label) + '</div>' +
+    '<div class="detail-stat-value">' + esc(String(value)) + '</div>' +
+  '</div>';
+}
+
+// ── Init ───────────────────────────────────────────
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
 from loopforge.db import delete_loop, init_db, list_loops, load_loop, save_loop
@@ -39,6 +40,16 @@ async def startup():
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": "0.1.0"}
+
+
+# ── Dashboard ─────────────────────────────────────────────────────────
+
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard():
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard", "index.html")
+    with open(dashboard_path) as f:
+        return f.read()
 
 
 # ── Strategies ───────────────────────────────────────────────────────

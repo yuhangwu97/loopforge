@@ -94,6 +94,33 @@ def bot(
 
 
 @app.command()
+def worker(
+    concurrency: int = 1,
+    queues: str = "celery",
+):
+    """Start a Celery worker for background task processing."""
+    from loopforge.celery_app import celery_app, is_redis_available
+
+    if not is_redis_available():
+        console.print("[red]Redis is not available.[/]")
+        console.print("Set LOOPFORGE_REDIS_URL or start Redis first.")
+        console.print("  e.g. docker run -d -p 6379:6379 redis:7")
+        raise typer.Exit(1)
+
+    console.print(f"[bold green]Starting LoopForge worker[/]")
+    console.print(f"  Broker: {celery_app.conf.broker_url}")
+    console.print(f"  Concurrency: {concurrency}")
+
+    argv = [
+        "worker",
+        "--loglevel=info",
+        f"--concurrency={concurrency}",
+        f"--queues={queues}",
+    ]
+    celery_app.worker_main(argv)
+
+
+@app.command()
 def strategies():
     """List available strategies."""
     from loopforge.strategy.registry import list_strategies

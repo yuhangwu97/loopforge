@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import shutil
+import tempfile
 import time
 from datetime import datetime
 
@@ -45,6 +48,38 @@ class LoopEngine:
     def resume(self):
         self._pause_event.set()
 
+    def _snapshot(self, target_path: str) -> dict[str, str]:
+        """Save contents of all files under target_path."""
+        snap = {}
+        if not target_path:
+            return snap
+        if os.path.isfile(target_path):
+            try:
+                with open(target_path) as f:
+                    snap[target_path] = f.read()
+            except Exception:
+                pass
+        elif os.path.isdir(target_path):
+            for root, _, files in os.walk(target_path):
+                for fn in files:
+                    fpath = os.path.join(root, fn)
+                    try:
+                        with open(fpath) as f:
+                            snap[fpath] = f.read()
+                    except Exception:
+                        pass
+        return snap
+
+    def _restore_snapshot(self, snap: dict[str, str]):
+        """Write snapshot contents back to disk."""
+        for fpath, content in snap.items():
+            try:
+                os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                with open(fpath, "w") as f:
+                    f.write(content)
+            except Exception:
+                pass
+
     async def run(self) -> LoopState:
         """Run the loop until done, failed, or cancelled."""
         cfg = self.state.config
@@ -83,6 +118,9 @@ class LoopEngine:
                 # ── ACT ───────────────────────────────────────────
                 self.state.status = LoopStatus.ACTING
                 self.state.updated_at = datetime.now().isoformat()
+
+                # Snapshot files before acting — used for backtrack
+                snapshot = self._snapshot(cfg.target.path)
 
                 result = await strategy.act(plan, self.state)
                 await self._emit("act", {
@@ -147,8 +185,12 @@ class LoopEngine:
                     break
 
                 if decision == Decision.BACKTRACK:
-                    # TODO: implement actual backtrack (revert changes)
-                    await self._emit("backtrack", {"round": round_num})
+                    # Revert files to pre-round state
+                    self._restore_snapshot(snapshot)
+                    await self._emit("backtrack", {
+                        "round": round_num,
+                        "files_restored": len(snapshot),
+                    })
 
         except Exception as e:
             self.state.status = LoopStatus.FAILED

@@ -1,4 +1,9 @@
-"""Background worker — manages running loops."""
+"""Background worker — manages running loops.
+
+Supports two backends:
+- In-process (asyncio tasks) — always available, no external dependencies
+- Celery + Redis — survives restarts, scales across workers
+"""
 
 from __future__ import annotations
 
@@ -16,6 +21,19 @@ class LoopWorker:
         self._engines: dict[str, LoopEngine] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._queues: dict[str, asyncio.Queue] = {}
+        self._use_celery: bool | None = None
+
+    @property
+    def use_celery(self) -> bool:
+        """Check if Celery+Redis is available."""
+        if self._use_celery is None:
+            try:
+                from loopforge.celery_app import is_redis_available
+
+                self._use_celery = is_redis_available()
+            except Exception:
+                self._use_celery = False
+        return self._use_celery
 
     def get_queue(self, loop_id: str) -> asyncio.Queue:
         if loop_id not in self._queues:
@@ -23,7 +41,27 @@ class LoopWorker:
         return self._queues[loop_id]
 
     async def start_loop(self, state: LoopState):
-        """Start executing a loop in the background."""
+        """Start executing a loop in the background.
+
+        Dispatches to Celery if Redis is available, otherwise runs in-process.
+        """
+        if self.use_celery:
+            await self._dispatch_celery(state)
+        else:
+            self._run_in_process(state)
+
+    async def _dispatch_celery(self, state: LoopState):
+        """Send task to Celery worker."""
+        from loopforge.celery_app import run_loop_task
+
+        # Save state so the worker can load it
+        save_loop(state)
+
+        # Dispatch to Celery (non-blocking)
+        run_loop_task.delay(state.id)
+
+    def _run_in_process(self, state: LoopState):
+        """Run the loop in this process (fallback mode)."""
         loop_id = state.id
         engine = LoopEngine(state)
         engine.event_queue = self.get_queue(loop_id)
@@ -41,7 +79,6 @@ class LoopWorker:
             state.errors.append(str(e))
         finally:
             save_loop(state)
-            # Cleanup
             self._engines.pop(loop_id, None)
             self._tasks.pop(loop_id, None)
 
